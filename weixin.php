@@ -2,7 +2,7 @@
 /**
   * wechat php test
   */
-echo "hello weixin";
+//echo "hello weixin";
 //define your token
 define("TOKEN", "shbjian");
 $wechatObj = new wechatCallbackapiTest();
@@ -37,14 +37,14 @@ class wechatCallbackapiTest
                 $keyword = trim($postObj->Content);
                 $time = time();
                 $textTpl = "<xml>
-							<ToUserName><![CDATA[%s]]></ToUserName>
-							<FromUserName><![CDATA[%s]]></FromUserName>
-							<CreateTime>%s</CreateTime>
-							<MsgType><![CDATA[%s]]></MsgType>
-							<Content><![CDATA[%s]]></Content>
-							<FuncFlag>0</FuncFlag>
-							</xml>";             
-				if(!empty( $keyword ))
+			    <ToUserName><![CDATA[%s]]></ToUserName>
+			    <FromUserName><![CDATA[%s]]></FromUserName>
+			    <CreateTime>%s</CreateTime>
+			    <MsgType><![CDATA[%s]]></MsgType>
+			    <Content><![CDATA[%s]]></Content>
+			    <FuncFlag>0</FuncFlag>
+			    </xml>";             
+		if(!empty( $keyword ))
                 {
               		$msgType = "text";
                 	$contentStr = "Welcome to wechat world!";
