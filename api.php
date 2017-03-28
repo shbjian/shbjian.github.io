@@ -2,9 +2,9 @@
 /**
   * wechat php test
   */
-//echo "hello weixin";
+echo "hello weixin";
 //define your token
-define("TOKEN", "shbjian");
+define("TOKEN","weixin");
 $wechatObj = new wechatCallbackapiTest();
 $wechatObj->valid();
 class wechatCallbackapiTest
