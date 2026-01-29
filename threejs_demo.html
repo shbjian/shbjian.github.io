@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Three.js 手势特效版 - Gemini 3 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; touch-action: none; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #video-element { transform: scaleX(-1); opacity: 0; position: absolute; pointer-events: none;}
+        
+        /* HUD 样式 */
+        .hud { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 10; 
+               display: flex; gap: 15px; pointer-events: none; }
+        .hud-item { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); 
+                    padding: 8px 16px; border-radius: 20px; color: #fff; font-size: 14px; 
+                    transition: all 0.3s ease; opacity: 0.5; backdrop-filter: blur(5px); }
+        .hud-item.active { background: rgba(79, 172, 254, 0.4); border-color: #4facfe; opacity: 1; transform: scale(1.1); font-weight: bold; box-shadow: 0 0 15px rgba(79, 172, 254, 0.5); }
+    </style>
+</head>
+<body>
+
+    <!-- HUD 状态栏 -->
+    <div class="hud">
+        <div id="status-open" class="hud-item">🖐️ 扩散</div>
+        <div id="status-pinch" class="hud-item">👌 聚能</div>
+        <div id="status-fist" class="hud-item">✊ 冻结</div>
+    </div>
+
+    <div class="absolute top-4 left-4 z-20 text-white opacity-70 text-xs">
+        <div id="fps-counter">FPS: --</div>
+    </div>
+
+    <div id="canvas-container"></div>
+    <video id="video-element" playsinline></video>
+
+<script>
+    // --- 配置参数 ---
+    const CONFIG = {
+        particleCount: 1500, // 手机端建议稍微减少粒子数
+        baseSpeed: 0.05,
+        colors: {
+            normal: new THREE.Color(0x00ffff), // 青色
+            pinch: new THREE.Color(0xff0055),  // 红色（聚能）
+            open: new THREE.Color(0xffff00),   // 黄色（扩散）
+            fist: new THREE.Color(0xffffff)    // 白色（冻结）
+        }
+    };
+
+    // --- 1. Three.js 初始化 ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.002);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 120;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); // 性能优化
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制DPR防止手机过热
+    container.appendChild(renderer.domElement);
+
+    // --- 2. 粒子系统构建 ---
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(CONFIG.particleCount * 3);
+    const velocities = new Float32Array(CONFIG.particleCount * 3);
+    const colors = new Float32Array(CONFIG.particleCount * 3);
+    const initialPos = new Float32Array(CONFIG.particleCount * 3); // 记住初始位置用于复位
+
+    for (let i = 0; i < CONFIG.particleCount; i++) {
+        const x = (Math.random() - 0.5) * 400;
+        const y = (Math.random() - 0.5) * 200;
+        const z = (Math.random() - 0.5) * 100;
+
+        positions[i * 3] = initialPos[i * 3] = x;
+        positions[i * 3 + 1] = initialPos[i * 3 + 1] = y;
+        positions[i * 3 + 2] = initialPos[i * 3 + 2] = z;
+
+        colors[i * 3] = CONFIG.colors.normal.r;
+        colors[i * 3 + 1] = CONFIG.colors.normal.g;
+        colors[i * 3 + 2] = CONFIG.colors.normal.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // 使用自定义着色器的材质会让粒子更好看，这里为了简洁使用 PointsMaterial
+    const material = new THREE.PointsMaterial({
+        size: 3.0,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        map: (() => {
+            // 生成一个简单的圆形纹理，比方块好看
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const context = canvas.getContext('2d');
+            const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, 32, 32);
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        })()
+    });
+
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    // --- 3. 手势逻辑状态 ---
+    const state = {
+        handActive: false,
+        x: 0, y: 0,
+        gesture: 'none', // 'pinch', 'open', 'fist', 'none'
+        gestureSmooth: 'none'
+    };
+
+    // UI 元素
+    const ui = {
+        open: document.getElementById('status-open'),
+        pinch: document.getElementById('status-pinch'),
+        fist: document.getElementById('status-fist'),
+        fps: document.getElementById('fps-counter')
+    };
+
+    function updateUI(gesture) {
+        ui.open.classList.toggle('active', gesture === 'open');
+        ui.pinch.classList.toggle('active', gesture === 'pinch');
+        ui.fist.classList.toggle('active', gesture === 'fist');
+    }
+
+    // --- 4. MediaPipe 数据处理 ---
+    function onResults(results) {
+        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+            state.handActive = false;
+            if(state.gesture !== 'none') {
+                state.gesture = 'none';
+                updateUI('none');
+            }
+            return;
+        }
+
+        const landmarks = results.multiHandLandmarks[0];
+        state.handActive = true;
+
+        // 1. 获取核心点位
+        const wrist = landmarks[0];
+        const thumbTip = landmarks[4];
+        const indexTip = landmarks[8];
+        const middleTip = landmarks[12];
+        const ringTip = landmarks[16];
+        const pinkyTip = landmarks[20];
+
+        // 2. 坐标映射 (2D -> 3D)
+        // 适当调整系数以适配屏幕
+        const targetX = (0.5 - indexTip.x) * 350; 
+        const targetY = (0.5 - indexTip.y) * 250;
+        
+        // 平滑插值
+        state.x += (targetX - state.x) * 0.15;
+        state.y += (targetY - state.y) * 0.15;
+
+        // 3. 简单手势识别逻辑
+        
+        // 计算指尖到手腕的距离，判断手指是否伸直
+        const dist = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+        
+        // 捏合：拇指与食指距离极近
+        const pinchDist = dist(thumbTip, indexTip);
+        
+        // 握拳：所有指尖都靠近手腕 (简化判断：中指尖靠近手腕)
+        const middleToWrist = dist(middleTip, wrist);
+        
+        let currentGesture = 'normal';
+
+        if (pinchDist < 0.05) {
+            currentGesture = 'pinch';
+        } else if (middleToWrist < 0.15) { 
+            // 这是一个近似值，根据手的大小可能需要微调
+            currentGesture = 'fist';
+        } else if (middleToWrist > 0.3) {
+            // 手指张得很开
+            currentGesture = 'open';
+        } else {
+            currentGesture = 'normal';
+        }
+
+        if (state.gesture !== currentGesture) {
+            state.gesture = currentGesture;
+            updateUI(currentGesture);
+        }
+    }
+
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0, // 手机端改为0以提升性能
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    hands.onResults(onResults);
+
+    const videoElement = document.getElementById('video-element');
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => { await hands.send({image: videoElement}); },
+        width: 640, // 降低分辨率以提升性能
+        height: 480
+    });
+    cameraUtils.start();
+
+    // --- 5. 动画物理循环 ---
+    let lastTime = 0;
+    
+    function animate(time) {
+        requestAnimationFrame(animate);
+
+        // FPS 简单计算
+        if (time - lastTime > 1000) {
+            ui.fps.innerText = `FPS: ${Math.round(1000 / ((time - lastTime) / 60))}`; // 粗略估算
+            lastTime = time;
+        }
+
+        const positionsArr = particles.geometry.attributes.position.array;
+        const colorsArr = particles.geometry.attributes.color.array; // 修正变量名错误
+        
+        // 确定目标颜色
+        let targetColor = CONFIG.colors.normal;
+        if (state.gesture === 'pinch') targetColor = CONFIG.colors.pinch;
+        if (state.gesture === 'open') targetColor = CONFIG.colors.open;
+        if (state.gesture === 'fist') targetColor = CONFIG.colors.fist;
+
+        for (let i = 0; i < CONFIG.particleCount; i++) {
+            const idx = i * 3;
+            let px = positionsArr[idx];
+            let py = positionsArr[idx+1];
+            let pz = positionsArr[idx+2];
+            
+            let vx = velocities[idx];
+            let vy = velocities[idx+1];
+            let vz = velocities[idx+2];
+
+            // --- 物理引擎核心 ---
+            
+            if (state.handActive) {
+                const dx = state.x - px;
+                const dy = state.y - py;
+                const dz = -pz;
+                const distSq = dx*dx + dy*dy + dz*dz;
+                const dist = Math.sqrt(distSq);
+
+                // 特效 1: 冻结 (Fist)
+                if (state.gesture === 'fist') {
+                    // 强力阻尼让粒子停下
+                    vx *= 0.8; vy *= 0.8; vz *= 0.8;
+                    // 稍微颤抖
+                    vx += (Math.random()-0.5)*0.1;
+                    vy += (Math.random()-0.5)*0.1;
+                } 
+                // 特效 2: 有力吸引/黑洞 (Pinch)
+                else if (state.gesture === 'pinch') {
+                    if (dist > 5) { // 防止除以0爆炸
+                        const force = 1000 / distSq; 
+                        vx += dx * 0.002 * force;
+                        vy += dy * 0.002 * force;
+                        vz += dz * 0.002 * force;
+                    }
+                }
+                // 特效 3: 斥力/冲击波 (Open)
+                else if (state.gesture === 'open') {
+                    if (dist < 150) {
+                        const force = (150 - dist) * 0.001; // 距离越近斥力越大
+                        vx -= dx * force;
+                        vy -= dy * force;
+                        vz -= dz * force; // 推向四周
+                    }
+                }
+                // 默认状态: 温和吸引
+                else {
+                    if (dist < 100) {
+                        vx += dx * 0.0005;
+                        vy += dy * 0.0005;
+                    }
+                }
+            }
+
+            // 基础物理：稍微回归初始位置（弹性）
+            if (state.gesture !== 'fist' && state.gesture !== 'pinch') {
+                 vx += (initialPos[idx] - px) * 0.001;
+                 vy += (initialPos[idx+1] - py) * 0.001;
+                 vz += (initialPos[idx+2] - pz) * 0.001;
+            }
+
+            // 阻尼
+            vx *= 0.95; vy *= 0.95; vz *= 0.95;
+
+            // 更新位置
+            positionsArr[idx] += vx;
+            positionsArr[idx+1] += vy;
+            positionsArr[idx+2] += vz;
+
+            // 存回速度
+            velocities[idx] = vx;
+            velocities[idx+1] = vy;
+            velocities[idx+2] = vz;
+
+            // 颜色渐变
+            colorsArr[idx] += (targetColor.r - colorsArr[idx]) * 0.1;
+            colorsArr[idx+1] += (targetColor.g - colorsArr[idx+1]) * 0.1;
+            colorsArr[idx+2] += (targetColor.b - colorsArr[idx+2]) * 0.1;
+        }
+
+        particles.geometry.attributes.position.needsUpdate = true;
+        particles.geometry.attributes.color.needsUpdate = true;
+        
+        // 场景微动
+        scene.rotation.y = Math.sin(time * 0.0002) * 0.1;
+
+        renderer.render(scene, camera);
+    }
+
+    animate(0);
+
+    // 窗口自适应
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
