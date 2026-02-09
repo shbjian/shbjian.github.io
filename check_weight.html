@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能零件称重检测系统</title>
-    <!-- 引入 Layui v2.5.5 样式 -->
     <link href="https://cdn.staticfile.org/layui/2.5.5/css/layui.css" rel="stylesheet">
-    <!-- 引入 FontAwesome 图标库 (用于美化图标) -->
     <link href="https://cdn.staticfile.org/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <style>
-        /* --- 全局样式重置与美化 --- */
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -26,7 +23,6 @@
             box-sizing: border-box;
         }
 
-        /* --- 头部区域 --- */
         .header {
             text-align: center;
             margin-bottom: 30px;
@@ -49,7 +45,7 @@
         }
 
         .header h1 {
-            font-size: 28px;
+            font-size: 24px;
             color: #2c3e50;
             font-weight: 600;
             margin-bottom: 5px;
@@ -60,7 +56,6 @@
             font-size: 14px;
         }
 
-        /* --- 卡片通用样式 --- */
         .main-card {
             background: #fff;
             border-radius: 12px;
@@ -87,18 +82,12 @@
             font-size: 18px;
         }
 
-        /* --- 表单区域 --- */
         .form-section {
-            padding: 35px 30px;
+            padding: 25px 20px;
             background-color: #fff;
             border-radius: 0 0 12px 12px;
         }
 
-        /* 自定义下拉框样式 */
-        .layui-form-select dl {
-            top: 42px;
-        }
-        
         .input-wrapper {
             position: relative;
             margin-bottom: 20px;
@@ -115,12 +104,14 @@
 
         .input-wrapper input, 
         .input-wrapper select {
+            width: 100%;
             padding-left: 40px !important;
             border-radius: 6px !important;
             border: 1px solid #e6e6e6 !important;
             transition: all 0.3s;
-            height: 42px !important;
-            line-height: 42px !important;
+            height: 45px !important;
+            line-height: 45px !important;
+            font-size: 16px;
         }
 
         .input-wrapper input:focus,
@@ -137,18 +128,20 @@
             display: block;
         }
 
-        /* --- 按钮组 --- */
         .action-btns {
             display: flex;
+            flex-direction: column;
             gap: 15px;
             margin-top: 25px;
         }
 
         .layui-btn {
             border-radius: 6px;
-            font-size: 15px;
+            font-size: 16px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: all 0.2s;
+            height: 48px !important;
+            line-height: 48px !important;
         }
 
         .layui-btn:active {
@@ -157,7 +150,7 @@
         }
 
         .btn-calculate {
-            flex: 2;
+            flex: 1;
             background: linear-gradient(90deg, #009688, #00b894);
             border: none;
         }
@@ -173,8 +166,7 @@
             border-color: #bbb;
             color: #333;
         }
-
-        /* --- 结果展示区域 --- */
+        
         .result-section {
             display: none;
             margin-top: 30px;
@@ -236,7 +228,7 @@
         }
 
         .result-value {
-            font-size: 42px;
+            font-size: 36px;
             font-weight: 700;
             font-family: 'Arial', sans-serif;
             line-height: 1.2;
@@ -252,7 +244,6 @@
             color: #fff;
         }
 
-        /* --- 表格样式 --- */
         .log-table-container {
             border-radius: 12px;
             overflow: hidden;
@@ -271,21 +262,19 @@
             font-weight: 600;
             color: #555;
             border-bottom: 2px solid #eee;
+            font-size: 14px;
         }
 
         .log-table tbody tr:hover {
             background-color: #fcfcfc;
         }
         
-        /* 状态标签样式 */
         .badge-pass { background-color: #e6f7ff; color: #009688; border: 1px solid #b7eb8f; padding: 2px 8px; border-radius: 4px; }
         .badge-heavy { background-color: #fff2e8; color: #FF5722; border: 1px solid #ffbb96; padding: 2px 8px; border-radius: 4px; }
         .badge-light { background-color: #e6f7ff; color: #1E9FFF; border: 1px solid #91d5ff; padding: 2px 8px; border-radius: 4px; }
 
+        /* 移动端优化 */
         @media (max-width: 768px) {
-            .action-btns {
-                flex-direction: column;
-            }
             .result-content {
                 flex-direction: column;
                 gap: 15px;
@@ -293,6 +282,19 @@
             .result-text-box {
                 margin-left: 0;
                 text-align: center;
+            }
+            .result-value {
+                font-size: 30px;
+            }
+            .result-status {
+                font-size: 16px;
+            }
+            .result-chart {
+                width: 80px;
+                height: 80px;
+            }
+            .chart-icon {
+                font-size: 24px;
             }
         }
     </style>
@@ -312,37 +314,35 @@
         </div>
         <div class="layui-card-body form-section">
             <form class="layui-form" action="">
-                <div class="layui-row layui-col-space20">
-                    <!-- 零件类型 -->
-                    <div class="layui-col-xs12 layui-col-md12">
-                        <div class="input-wrapper">
-                            <i class="fa fa-cubes"></i>
-                            <select name="partType" id="select_partType" lay-filter="partType" lay-verify="required">
-                                <option value="">请选择零件类型...</option>
-                                <option value="0">普通零件 (自动取整)</option>
-                                <option value="1">标准件 (保留1位小数)</option>
-                                <option value="2" selected>精密件 (保留2位小数)</option>
-                                <option value="3">高精度件 (保留3位小数)</option>
-                            </select>
-                        </div>
+                <!-- 零件类型 -->
+                <div class="layui-form-item">
+                    <div class="input-wrapper">
+                        <i class="fa fa-cubes"></i>
+                        <select name="partType" id="select_partType" lay-filter="partType" lay-verify="required">
+                            <option value="">请选择零件类型...</option>
+                            <option value="0">普通零件 (自动取整)</option>
+                            <option value="1">标准件 (保留1位小数)</option>
+                            <option value="2" selected>精密件 (保留2位小数)</option>
+                            <option value="3">高精度件 (保留3位小数)</option>
+                        </select>
                     </div>
+                </div>
 
-                    <!-- 理论重量 -->
-                    <div class="layui-col-xs6 layui-col-md6">
-                        <div class="input-wrapper">
-                            <i class="fa fa-file-text-o"></i>
-                            <input type="number" name="theoretical" id="input_theoretical" required lay-verify="required|number|positive" placeholder="理论标准重量" autocomplete="off">
-                        </div>
+                <!-- 理论重量 -->
+                <div class="layui-form-item">
+                    <div class="input-wrapper">
+                        <i class="fa fa-file-text-o"></i>
+                        <input type="number" name="theoretical" id="input_theoretical" required lay-verify="required|number|positive" placeholder="理论标准重量" autocomplete="off">
                     </div>
+                </div>
 
-                    <!-- 实际重量 -->
-                    <div class="layui-col-xs6 layui-col-md6">
-                        <div class="input-wrapper">
-                            <i class="fa fa-balance-scale"></i>
-                            <input type="number" name="actual" id="input_actual" required lay-verify="required|number|positive" placeholder="输入实际重量(自动修约)" autocomplete="off">
-                        </div>
-                        <span class="hint-text"><i class="fa fa-info-circle"></i> 输入后自动按类型规则修约</span>
+                <!-- 实际重量 -->
+                <div class="layui-form-item">
+                    <div class="input-wrapper">
+                        <i class="fa fa-balance-scale"></i>
+                        <input type="number" name="actual" id="input_actual" required lay-verify="required|number|positive" placeholder="输入实际重量(自动修约)" autocomplete="off">
                     </div>
+                    <span class="hint-text"><i class="fa fa-info-circle"></i> 输入后自动按类型规则修约</span>
                 </div>
 
                 <div class="action-btns">
@@ -358,7 +358,6 @@
             <!-- 结果展示区域 -->
             <div id="result-area" class="result-section">
                 <div class="result-content">
-                    <!-- 模拟仪表盘图标 -->
                     <div class="result-chart" id="result-chart-bg">
                         <i class="fa fa-check-circle chart-icon" id="result-icon"></i>
                     </div>
@@ -418,7 +417,6 @@
         var layer = layui.layer;
         var $ = layui.$;
 
-        // 配置数据
         var partConfig = {
             '0': { name: '普通零件', decimals: 0 },
             '1': { name: '标准件', decimals: 1 },
@@ -429,14 +427,12 @@
         var currentDecimals = 2;
         var logCount = 0;
 
-        // 验证规则
         form.verify({
             positive: function(value) {
                 if(value <= 0) return '数值必须大于0';
             }
         });
 
-        // 下拉切换监听
         form.on('select(partType)', function(data){
             var val = data.value;
             if(partConfig[val]) {
@@ -448,7 +444,6 @@
             }
         });
 
-        // 输入框自动修约逻辑
         function formatInput(selector) {
             $(selector).on('blur', function() {
                 var val = $(this).val();
@@ -467,7 +462,6 @@
         formatInput('#input_actual');
         formatInput('#input_theoretical');
 
-        // 核心计算
         $('#btn-calculate').on('click', function() {
             var typeVal = $('#select_partType').val();
             var theoVal = $('#input_theoretical').val();
@@ -481,8 +475,7 @@
             var deviationRate = ((actual - theoretical) / theoretical) * 100;
             var rateStr = deviationRate.toFixed(2) + "%";
             
-            // 状态逻辑
-            var status = 'pass'; // pass, heavy, light
+            var status = 'pass';
             var statusText = '合格';
             
             if (deviationRate > 7) {
@@ -496,7 +489,6 @@
             updateUI(rateStr, statusText, status);
             addLog(partConfig[typeVal].name, theoretical, actual, rateStr, statusText, status);
             
-            // 弹窗
             var color = status === 'pass' ? '#009688' : (status === 'heavy' ? '#FF5722' : '#1E9FFF');
             layer.open({
                 title: false,
@@ -507,7 +499,6 @@
             });
         });
 
-        // 更新UI显示
         function updateUI(rateStr, statusText, status) {
             var $area = $('#result-area');
             var $chartBg = $('#result-chart-bg');
@@ -517,7 +508,6 @@
 
             $area.slideDown();
 
-            // 颜色配置
             var colors = {
                 pass: { bg: '#009688', border: '#92d0d0', icon: 'fa-check-circle' },
                 heavy: { bg: '#FF5722', border: '#ffccc7', icon: 'fa-exclamation-circle' },
@@ -525,19 +515,16 @@
             };
             var theme = colors[status];
 
-            // 更新文字
             $value.text(rateStr);
             $value.css('color', theme.bg);
             $status.text(statusText);
             $status.css({ 'background-color': theme.bg, 'border-color': theme.border });
 
-            // 更新图表图标
             $icon.attr('class', 'fa ' + theme.icon + ' chart-icon');
             $icon.css('color', theme.bg);
             $chartBg.css('border', '4px solid ' + theme.bg);
         }
 
-        // 添加日志
         function addLog(type, theo, act, rate, statusText, status) {
             logCount++;
             $('#empty-tip').hide();
@@ -556,7 +543,6 @@
             $('#log-tbody').prepend(tr);
         }
 
-        // 重置
         $('#btn-reset').on('click', function() {
             $('#select_partType').val("");
             form.render('select');
